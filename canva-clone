@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movable Canvas Objects</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #canvas {
+            border: 1px solid #000;
+            background-color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .controls button, .controls input {
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button id="drawLine">Line</button>
+        <button id="drawRect">Rectangle</button>
+        <button id="drawCircle">Circle</button>
+        <input type="color" id="colorPicker" value="#000000">
+        <button id="clearCanvas">Clear Canvas</button>
+    </div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let isDrawing = false;
+        let isDragging = false;
+        let shape = 'line';
+        let startX, startY;
+        let currentShape = null;
+        let color = '#000000';
+
+        // Shape object
+        const shapes = [];
+
+        // Set up event listeners for shape buttons
+        document.getElementById('drawLine').addEventListener('click', () => shape = 'line');
+        document.getElementById('drawRect').addEventListener('click', () => shape = 'rectangle');
+        document.getElementById('drawCircle').addEventListener('click', () => shape = 'circle');
+
+        // Set up event listener for color picker
+        document.getElementById('colorPicker').addEventListener('input', (e) => {
+            color = e.target.value;
+        });
+
+        // Set up event listener for clear canvas button
+        document.getElementById('clearCanvas').addEventListener('click', () => {
+            shapes.length = 0; // Clear shapes array
+            redraw();
+        });
+
+        // Mouse event listeners
+        canvas.addEventListener('mousedown', (e) => {
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            const clickedShape = shapes.find(shape => isMouseOverShape(shape, mouseX, mouseY));
+
+            if (clickedShape) {
+                isDragging = true;
+                currentShape = clickedShape;
+                startX = mouseX - currentShape.x;
+                startY = mouseY - currentShape.y;
+            } else {
+                isDrawing = true;
+                startX = mouseX;
+                startY = mouseY;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                const mouseX = e.offsetX;
+                const mouseY = e.offsetY;
+
+                if (shape === 'line') {
+                    redraw();
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(mouseX, mouseY);
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                } else if (shape === 'rectangle') {
+                    redraw();
+                    ctx.beginPath();
+                    ctx.rect(startX, startY, mouseX - startX, mouseY - startY);
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                } else if (shape === 'circle') {
+                    redraw();
+                    ctx.beginPath();
+                    const radius = Math.sqrt(Math.pow(mouseX - startX, 2) + Math.pow(mouseY - startY, 2));
+                    ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                }
+            } else if (isDragging) {
+                const mouseX = e.offsetX;
+                const mouseY = e.offsetY;
+                currentShape.x = mouseX - startX;
+                currentShape.y = mouseY - startY;
+                redraw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (isDrawing) {
+                const endX = event.offsetX;
+                const endY = event.offsetY;
+                if (shape === 'line') {
+                    shapes.push({ type: 'line', x1: startX, y1: startY, x2: endX, y2: endY, color });
+                } else if (shape === 'rectangle') {
+                    shapes.push({ type: 'rectangle', x: startX, y: startY, width: endX - startX, height: endY - startY, color });
+                } else if (shape === 'circle') {
+                    const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    shapes.push({ type: 'circle', x: startX, y: startY, radius, color });
+                }
+                isDrawing = false;
+            }
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+            isDragging = false;
+        });
+
+        function isMouseOverShape(shape, x, y) {
+            if (shape.type === 'line') {
+                // Line hit detection (simple)
+                const { x1, y1, x2, y2 } = shape;
+                const distance = Math.abs((y2 - y1) * x - (x2 - x1) * y + x2 * y1 - y2 * x1) / Math.sqrt(Math.pow(y2 - y1, 2) + Math.pow(x2 - x1, 2));
+                return distance < 5; // Allow some margin
+            } else if (shape.type === 'rectangle') {
+                const { x: sx, y: sy, width, height } = shape;
+                return x > sx && x < sx + width && y > sy && y < sy + height;
+            } else if (shape.type === 'circle') {
+                const { x: cx, y: cy, radius } = shape;
+                const dx = x - cx;
+                const dy = y - cy;
+                return dx * dx + dy * dy <= radius * radius;
+            }
+            return false;
+        }
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            shapes.forEach(shape => {
+                ctx.strokeStyle = shape.color;
+                ctx.fillStyle = shape.color;
+                ctx.beginPath();
+                if (shape.type === 'line') {
+                    ctx.moveTo(shape.x1, shape.y1);
+                    ctx.lineTo(shape.x2, shape.y2);
+                } else if (shape.type === 'rectangle') {
+                    ctx.rect(shape.x, shape.y, shape.width, shape.height);
+                } else if (shape.type === 'circle') {
+                    ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+                }
+                ctx.stroke();
+            });
+        }
+    </script>
+</body>
+</html>
